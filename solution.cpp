@@ -7,54 +7,112 @@ using namespace std;
 
 const int MAXN = 3005;
 
-class MaxFlowSolver {
+class EfficientMaxFlow {
 private:
     int n;
     vector<vector<int>> adj;
-    vector<vector<bool>> used;
     
-    bool find_path(int s, int t, vector<bool>& visited) {
-        if (s == t) return true;
-        visited[s] = true;
+    // BFS to find shortest path and return distance
+    int bfs_distance(int s, int t) {
+        vector<int> dist(n, -1);
+        queue<int> q;
+        dist[s] = 0;
+        q.push(s);
         
-        for (size_t i = 0; i < adj[s].size(); i++) {
-            int v = adj[s][i];
-            if (!visited[v] && !used[s][i]) {
-                used[s][i] = true;
-                if (find_path(v, t, visited)) {
-                    return true;
+        while (!q.empty()) {
+            int u = q.front(); q.pop();
+            if (u == t) return dist[u];
+            
+            for (int v : adj[u]) {
+                if (dist[v] == -1) {
+                    dist[v] = dist[u] + 1;
+                    q.push(v);
                 }
-                used[s][i] = false;
             }
         }
-        return false;
+        return -1; // No path
+    }
+    
+    // Check if there are k edge-disjoint paths from s to t
+    bool has_k_disjoint_paths(int s, int t, int k) {
+        if (k == 0) return true;
+        if (k == 1) return bfs_distance(s, t) != -1;
+        
+        // For k >= 2, we need to check more carefully
+        // Since degree <= 3, k can be at most 3
+        
+        vector<vector<bool>> edge_used(n);
+        for (int i = 0; i < n; i++) {
+            edge_used[i].resize(adj[i].size(), false);
+        }
+        
+        for (int path = 0; path < k; path++) {
+            vector<int> parent(n, -1);
+            vector<int> edge_idx(n, -1);
+            queue<int> q;
+            q.push(s);
+            parent[s] = s;
+            
+            bool found = false;
+            while (!q.empty() && !found) {
+                int u = q.front(); q.pop();
+                
+                for (size_t i = 0; i < adj[u].size(); i++) {
+                    int v = adj[u][i];
+                    if (parent[v] == -1 && !edge_used[u][i]) {
+                        parent[v] = u;
+                        edge_idx[v] = i;
+                        if (v == t) {
+                            found = true;
+                            break;
+                        }
+                        q.push(v);
+                    }
+                }
+            }
+            
+            if (!found) return false;
+            
+            // Mark edges on this path as used
+            int current = t;
+            while (current != s) {
+                int prev = parent[current];
+                int idx = edge_idx[current];
+                edge_used[prev][idx] = true;
+                
+                // Mark reverse edge as used too
+                for (size_t i = 0; i < adj[current].size(); i++) {
+                    if (adj[current][i] == prev) {
+                        edge_used[current][i] = true;
+                        break;
+                    }
+                }
+                
+                current = prev;
+            }
+        }
+        
+        return true;
     }
     
     int max_flow(int s, int t) {
-        int flow = 0;
-        // Since each node has degree ≤ 3 and capacity = 1, max flow is at most 3
-        for (int attempt = 0; attempt < 3; attempt++) {
-            vector<bool> visited(n, false);
-            if (find_path(s, t, visited)) {
-                flow++;
-            } else {
-                break;
+        // Since degree <= 3 and capacity = 1, max flow is at most 3
+        for (int k = 3; k >= 0; k--) {
+            if (has_k_disjoint_paths(s, t, k)) {
+                return k;
             }
         }
-        return flow;
+        return 0;
     }
     
 public:
-    MaxFlowSolver(int n) : n(n) {
+    EfficientMaxFlow(int n) : n(n) {
         adj.resize(n);
-        used.resize(n);
     }
     
     void add_edge(int u, int v) {
         adj[u].push_back(v);
         adj[v].push_back(u);
-        used[u].push_back(false);
-        used[v].push_back(false);
     }
     
     long long solve_all_pairs() {
@@ -62,11 +120,6 @@ public:
         
         for (int s = 0; s < n; s++) {
             for (int t = s + 1; t < n; t++) {
-                // Reset used flags for this pair
-                for (int i = 0; i < n; i++) {
-                    fill(used[i].begin(), used[i].end(), false);
-                }
-                
                 int flow = max_flow(s, t);
                 total += flow;
             }
@@ -83,7 +136,7 @@ int main() {
     int n, m;
     cin >> n >> m;
     
-    MaxFlowSolver solver(n);
+    EfficientMaxFlow solver(n);
     
     for (int i = 0; i < m; i++) {
         int a, b;
